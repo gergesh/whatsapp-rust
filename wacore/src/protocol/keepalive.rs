@@ -7,10 +7,19 @@
 
 use std::time::Duration;
 
-/// WA Web: `healthCheckInterval = 15` -> `15 * (1 + random())` = 15-30 s.
-pub const KEEP_ALIVE_INTERVAL_MIN: Duration = Duration::from_secs(15);
-/// Upper bound of the randomized keepalive interval (30 s).
-pub const KEEP_ALIVE_INTERVAL_MAX: Duration = Duration::from_secs(30);
+// EXPERIMENT (Baeem fork): pinned to a fixed 2 s so an idle socket is pinged
+// every ~2 s. WA Web's real cadence is `healthCheckInterval = 15` ->
+// `15 * (1 + random())` = 15-30 s (kept in the comment for reference), but a
+// backgrounded mobile tab (user switched to WhatsApp to type the pair code)
+// gets its timers coalesced, so a 15-30 s idle ping lets the server drop the
+// pairing socket before the user is back. A tight 2 s ping — paired with the
+// PiP/audio page-liveness keepalive on the JS side — is the thing under test.
+// Setting MIN == MAX makes the randomized interval collapse to exactly 2 s and
+// also drops the "skip ping, saw data recently" window to 2 s (see
+// keepalive_loop), so a genuinely idle socket really does ping every ~2 s.
+pub const KEEP_ALIVE_INTERVAL_MIN: Duration = Duration::from_secs(2);
+/// Upper bound of the randomized keepalive interval — see MIN (experiment: 2 s).
+pub const KEEP_ALIVE_INTERVAL_MAX: Duration = Duration::from_secs(2);
 /// Maximum time to wait for a keepalive pong before declaring timeout (20 s).
 pub const KEEP_ALIVE_RESPONSE_DEADLINE: Duration = Duration::from_secs(20);
 /// WA Web: `deadSocketTime = 20_000` -- if no data arrives for this long
@@ -119,8 +128,9 @@ mod tests {
 
     #[test]
     fn constants_match_wa_web() {
-        assert_eq!(KEEP_ALIVE_INTERVAL_MIN, Duration::from_secs(15));
-        assert_eq!(KEEP_ALIVE_INTERVAL_MAX, Duration::from_secs(30));
+        // Experiment (Baeem fork): pinned to a fixed 2 s keepalive, not WA Web's 15-30 s.
+        assert_eq!(KEEP_ALIVE_INTERVAL_MIN, Duration::from_secs(2));
+        assert_eq!(KEEP_ALIVE_INTERVAL_MAX, Duration::from_secs(2));
         assert_eq!(DEAD_SOCKET_TIME, Duration::from_secs(20));
     }
 }
